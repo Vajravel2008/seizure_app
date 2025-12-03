@@ -1,0 +1,5 @@
+Flask
+numpy
+tensorflow==2.15.0
+mne
+gunicorn
