@@ -24,9 +24,12 @@ def process_edf(file_path):
 
     return pred1, pred2
 
-@app.route("/", methods=["GET", "POST"])
+@app.route("/", methods=["GET", "POST", "HEAD"])
 def index():
+    if request.method == "HEAD":
+        return "", 200
     result = ""
+
 
     if request.method == "POST":
         if "file" not in request.files:
