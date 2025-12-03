@@ -3,16 +3,21 @@ import numpy as np
 import tensorflow as tf
 import mne
 import os
+import tempfile
 
 app = Flask(__name__)
-UPLOAD_FOLDER = "uploads"
-os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
+# Load models
 model1 = tf.keras.models.load_model("seizure_model.h5")
 model2 = tf.keras.models.load_model("seizure_chbmit_model.h5")
 
-def process_edf(file_path):
-    raw = mne.io.read_raw_edf(file_path, preload=True, verbose=False)
+# Process EDF without saving permanently
+def process_edf(file):
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".edf") as tmp:
+        file.save(tmp.name)
+        temp_path = tmp.name
+
+    raw = mne.io.read_raw_edf(temp_path, preload=True, verbose=False)
     raw.filter(0.5, 40)
     data = raw.get_data()
     data = data[:, :2560]
@@ -22,15 +27,15 @@ def process_edf(file_path):
     pred1 = model1.predict(data)[0][0]
     pred2 = model2.predict(data)[0][0]
 
+    os.remove(temp_path)
     return pred1, pred2
 
 @app.route("/", methods=["GET", "POST", "HEAD"])
 def index():
     if request.method == "HEAD":
         return "", 200
+
     result = ""
-
-
     if request.method == "POST":
         if "file" not in request.files:
             return render_template("index.html", result="No file uploaded.")
@@ -39,10 +44,7 @@ def index():
         if file.filename == "":
             return render_template("index.html", result="No file selected.")
 
-        file_path = os.path.join(UPLOAD_FOLDER, file.filename)
-        file.save(file_path)
-
-        pred1, pred2 = process_edf(file_path)
+        pred1, pred2 = process_edf(file)
 
         if pred1 > 0.5 or pred2 > 0.5:
             result = f"⚠️ SEIZURE DETECTED (M1={pred1:.2f}, M2={pred2:.2f})"
@@ -52,7 +54,5 @@ def index():
     return render_template("index.html", result=result)
 
 if __name__ == "__main__":
-    import os
-    port = int(os.environ.get("PORT", 10000))
+    port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port)
-
